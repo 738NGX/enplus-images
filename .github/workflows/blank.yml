@@ -72,3 +72,8 @@ jobs:
           else
             echo "No changes in manifest."
           fi
+
+      - name: Purge jsDelivr Cache
+        run: |
+          curl -I https://purge.jsdelivr.net/gh/738NGX/enplus-images@main/actors-manifest.json
+          echo "CDN Cache Purged!"
