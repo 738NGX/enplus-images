@@ -1,0 +1,74 @@
+name: Generate Actor Manifest
+
+# 触发条件：
+# 1. 当 push 到 main 分支
+# 2. 且仅当 actors 文件夹下的文件发生变化时触发
+# 3. 允许手动在 Actions 页面触发
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'actors/**'
+  workflow_dispatch:
+
+# 赋予 GITHUB_TOKEN 写权限，以便提交生成的 JSON 文件
+permissions:
+  contents: write
+
+jobs:
+  build-and-commit:
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1. 检出代码
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # 2. 运行 Python 脚本扫描文件夹并生成 JSON
+      - name: Generate JSON Manifest
+        run: |
+          python3 -c "
+          import os
+          import json
+
+          # 配置
+          img_dir = 'actors'
+          output_file = 'actors-manifest.json'
+          extensions = ('.webp', '.png', '.jpg', '.jpeg', '.gif')
+          manifest = {}
+
+          if os.path.exists(img_dir):
+              # 遍历 actors 文件夹
+              for filename in os.listdir(img_dir):
+                  if filename.lower().endswith(extensions):
+                      # 获取不带后缀的文件名 (即 ID)
+                      file_id = os.path.splitext(filename)[0]
+                      # 写入字典，值为 1 或 true 均可，为了文件尽可能小，用 1
+                      manifest[file_id] = 1
+              
+              # 生成 JSON 文件
+              with open(output_file, 'w') as f:
+                  json.dump(manifest, f, separators=(',', ':')) # 压缩格式
+              
+              print(f'Successfully generated {output_file} with {len(manifest)} entries.')
+          else:
+              print(f'Directory {img_dir} not found.')
+          "
+
+      # 3. 提交并推送到仓库
+      - name: Commit and Push changes
+        run: |
+          # 配置 git 用户身份为 GitHub Actions Bot
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          
+          # 检查是否有文件变化
+          if [[ -n $(git status -s actors-manifest.json) ]]; then
+            echo "Manifest file changed. Committing..."
+            git add actors-manifest.json
+            git commit -m "chore: update actors manifest [skip ci]"
+            git push
+          else
+            echo "No changes in manifest."
+          fi
